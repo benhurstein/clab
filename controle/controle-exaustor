@@ -1,0 +1,58 @@
+#!/bin/bash
+
+MQTT_HOST=localhost
+
+last_b1_date=0
+last_b2_date=0
+
+now=$(date +%s)
+proximo_envio=$[now+10]
+exaust=0
+nb1=0
+nb2=0
+
+mosquitto_sub -h $MQTT_HOST -t /clab/sensor/aquecedor-fluxo-b1-quente -t /clab/sensor/aquecedor-fluxo-b2-quente | while true
+do
+  read b1
+  read b2
+  b1=$(echo $b1|cut -d. -f1)
+  b2=$(echo $b2|cut -d. -f1)
+  now=$(date +%s)
+  if [ $b1 -gt 0 ]; then
+    nb1=$[nb1+1]
+    if [ $nb1 -gt 3 ]; then
+      last_b1_date=$now
+    fi
+  else
+    nb1=0
+  fi
+  if [ $b2 -gt 0 ]; then
+    nb2=$[nb2+1]
+    if [ $nb2 -gt 3 ]; then
+      last_b2_date=$now
+    fi
+  else
+    nb2=0
+  fi
+  wanted_exaust=0
+  if [ $[now-last_b1_date] -lt $[15*60] ]; then # deixa funcionando por 15min depois de desligado
+    wanted_exaust=$[wanted_exaust+35]
+    b1_damper=100
+  else
+    b1_damper=0
+  fi
+  if [ $[now-last_b2_date] -lt 120 ]; then
+    wanted_exaust=$[wanted_exaust+34]
+    b2_damper=100
+  else
+    b2_damper=0
+  fi
+  
+  if [ $wanted_exaust != $exaust -o $now -ge $proximo_envio ]; then
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-B1 -m $b1_damper
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-B2 -m $b2_damper
+    exaust=$wanted_exaust
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/ventilador-exaustao -m $exaust
+    proximo_envio=$[now+10]
+  fi
+done
