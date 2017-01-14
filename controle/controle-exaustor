@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# controle do exaustor
+# ====================
+# liga o exaustor dos banheiros quando identifica consumo de água quente
+
 MQTT_HOST=localhost
 
 last_b1_date=0
