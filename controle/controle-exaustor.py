@@ -3,7 +3,8 @@ import sys
 import time
 import paho.mqtt.client as mqtt
 
-mqtt_host='192.168.0.4'
+mqtt_host = '192.168.0.4'
+pub_secs = 10
 
 # class sensor
 # topic, data (b1), counter (nb1), timestamp (last_b1_date)
@@ -18,14 +19,15 @@ class Sensor:
         self.counter = 0
         self.last_on = 0.0 # ultima vez visto ligado
         self.last_off = 0.0 # ultima vez desligado
+        self.next_pub = time.time()+pub_secs
         self.damper = 0
         self.time_on = time_on
         self.incr = incr
 
 
 mysensors = [
-    Sensor('/clab/sensor/aquecedor-fluxo-b1-quente', '/clab/actuator/borboleta-B1', 1*60, 35),
-    Sensor('/clab/sensor/aquecedor-fluxo-b2-quente', '/clab/actuator/borboleta-B2', 1*60, 34)
+    Sensor('/clab/sensor/aquecedor-fluxo-b1-quente', '/clab/actuator/borboleta-B1', 10*60, 35),
+    Sensor('/clab/sensor/aquecedor-fluxo-b2-quente', '/clab/actuator/borboleta-B2', 10*60, 34)
 ]
 
 
@@ -49,8 +51,7 @@ def on_connect(client, userdata, flags, rc):
 
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
-    global now
-    global proximo_envio
+
     global wanted_exaust
     global exaust
 
@@ -76,13 +77,13 @@ def on_message(client, userdata, msg):
 
     print(sensor)
 
-    if wanted_exaust != exaust or now >= proximo_envio:
+    if wanted_exaust != exaust or now >= sensor.next_pub:
         print('Publish', sensor.actuator, str(sensor.damper))
         client.publish(sensor.actuator, str(sensor.damper), retain=True)
         exaust = wanted_exaust
         print('Publish', str(exaust))
         client.publish('/clab/actuator/ventilador-exaustao', str(exaust), retain=True)
-        proximo_envio = now+10
+        next_pub = now + pub_secs
 
   # if [ $wanted_exaust != $exaust -o $now -ge $proximo_envio ]; then
   #   mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-B1 -m $b1_damper
@@ -94,14 +95,11 @@ def on_message(client, userdata, msg):
 
 def main(argv):
 
-    global now
-    global proximo_envio
     global wanted_exaust
     global exaust
 
     sensordict = get_sensordict(mysensors)
-    now = time.time()
-    proximo_envio = now+10
+
     wanted_exaust = 0
     exaust = 0
 
