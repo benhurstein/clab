@@ -83,7 +83,7 @@ def on_message(client, userdata, msg):
         exaust = wanted_exaust
         print('Publish', str(exaust))
         client.publish('/clab/actuator/ventilador-exaustao', str(exaust), retain=True)
-        next_pub = now + pub_secs
+        sensor.next_pub = now + pub_secs
 
   # if [ $wanted_exaust != $exaust -o $now -ge $proximo_envio ]; then
   #   mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-B1 -m $b1_damper
