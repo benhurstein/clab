@@ -107,7 +107,7 @@ ISR(USART_RX_vect)
 // interrupt -- UART send register is empty
 ISR(USART_UDRE_vect)
 {
-  if (snd_buf.snd_ack_to_send) {
+  if (snd_buf.snd_ack_to_send && snd_buf.snd_msg_oix == snd_buf.snd_msg_six) {
     putch(snd_buf.snd_ack_to_send);
     snd_buf.snd_ack_to_send = 0;
   } else if (snd_buf.snd_msg_oix != snd_buf.snd_msg_eix) {
