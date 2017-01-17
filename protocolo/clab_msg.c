@@ -43,56 +43,6 @@ typedef struct {
 } snd_buf_t;
 
 
-// CRC Code adapted from OneWire library
-
-// The 1-Wire CRC scheme is described in Maxim Application Note 27:
-// "Understanding and Using Cyclic Redundancy Checks with Maxim iButton Products"
-
-// This table comes from Dallas sample code where it is freely reusable,
-// though Copyright (C) 2000 Dallas Semiconductor Corporation
-#ifdef ARDUINO_ARCH_AVR
-static const uint8_t PROGMEM dscrc_table[] = {
-#else
-static const uint8_t dscrc_table[] = {
-#endif
-    0, 94,188,226, 97, 63,221,131,194,156,126, 32,163,253, 31, 65,
-  157,195, 33,127,252,162, 64, 30, 95,  1,227,189, 62, 96,130,220,
-   35,125,159,193, 66, 28,254,160,225,191, 93,  3,128,222, 60, 98,
-  190,224,  2, 92,223,129, 99, 61,124, 34,192,158, 29, 67,161,255,
-   70, 24,250,164, 39,121,155,197,132,218, 56,102,229,187, 89,  7,
-  219,133,103, 57,186,228,  6, 88, 25, 71,165,251,120, 38,196,154,
-  101, 59,217,135,  4, 90,184,230,167,249, 27, 69,198,152,122, 36,
-  248,166, 68, 26,153,199, 37,123, 58,100,134,216, 91,  5,231,185,
-  140,210, 48,110,237,179, 81, 15, 78, 16,242,172, 47,113,147,205,
-   17, 79,173,243,112, 46,204,146,211,141,111, 49,178,236, 14, 80,
-  175,241, 19, 77,206,144,114, 44,109, 51,209,143, 12, 82,176,238,
-   50,108,142,208, 83, 13,239,177,240,174, 76, 18,145,207, 45,115,
-  202,148,118, 40,171,245, 23, 73,  8, 86,180,234,105, 55,213,139,
-   87,  9,235,181, 54,104,138,212,149,203, 41,119,244,170, 72, 22,
-  233,183, 85, 11,136,214, 52,106, 43,117,151,201, 74, 20,246,168,
-  116, 42,200,150, 21, 75,169,247,182,232, 10, 84,215,137,107, 53
-};
-
-uint8_t crc8(uint8_t crc, uint8_t val)
-{
-#ifdef ARDUINO_ARCH_AVR
-    return pgm_read_byte(dscrc_table + (crc ^ val));
-#else
-    return dscrc_table[crc ^ val];
-#endif
-}
-
-uint8_t crc8_blk(const uint8_t *addr, uint8_t len)
-{
-  uint8_t crc = 0;
-
-  while (len--) {
-    crc = crc8(crc, *addr++);
-  }
-  return crc;
-}
-
-
 #ifdef ARDUINO_ARCH_AVR
 
 #include <Arduino.h>
@@ -586,7 +536,7 @@ bool msg_start(void)
   }
   snd_buf.snd_msg_escaped = false;
   snd_buf.snd_msg_buf[snd_buf.snd_msg_pix++] = snd_buf.snd_MSG_DATA;
-  snd_buf.snd_msg_crc = snd_buf.snd_MSG_DATA;
+  snd_buf.snd_msg_crc = crc8(0, snd_buf.snd_MSG_DATA);
   snd_buf.overflow = false;
   return true;
 }
@@ -609,7 +559,7 @@ void msg_putbyte(uint8_t b)
     snd_buf.overflow = true;
     return;
   }
-  snd_buf.snd_msg_crc ^= b;
+  snd_buf.snd_msg_crc = crc8(snd_buf.snd_msg_crc, b);
   if (!snd_buf.snd_msg_escaped) {
     if (invalid_unescaped_byte(b)) {
       snd_buf.snd_msg_buf[snd_buf.snd_msg_pix] = ESCAPE_CHAR;
@@ -779,7 +729,7 @@ static uint8_t getbyte(void)
       return getbyte();
     }
   }
-  rcv_msg_crc ^= ch;
+  rcv_msg_crc = crc8(rcv_msg_crc, ch);
   return ch;
 }
 
@@ -789,7 +739,7 @@ static uint8_t getbyte(void)
 // return false if not successfull (repeated message, incorrect CRC)
 static bool msg_get_data_msg(msg *m)
 {
-  uint8_t crc = m->type;
+  uint8_t crc = crc8(0, m->type);
   uint8_t ix = 0;
   while (true) {
     uint8_t b = getbyte();
@@ -797,10 +747,10 @@ static bool msg_get_data_msg(msg *m)
       break;
     }
     if (ix < MSG_MAX_LEN) {
-      crc ^= b;
+      crc = crc8(crc, b);
       m->data[ix++] = b;
     } else {
-      crc = 1;
+      crc = 1; // invalid crc
     }
   }
 #ifdef DEBUG_UART_CHARS
@@ -904,5 +854,60 @@ uint16_t msg_getword(msg *m)
   uint8_t b;
   b = msg_getbyte(m);
   return b | ((uint16_t)msg_getbyte(m) << 8);
+}
+
+
+
+// CRC Code adapted from OneWire library
+
+// The 1-Wire CRC scheme is described in Maxim Application Note 27:
+// "Understanding and Using Cyclic Redundancy Checks with Maxim iButton Products"
+
+// This table comes from Dallas sample code where it is freely reusable,
+// though Copyright (C) 2000 Dallas Semiconductor Corporation
+#ifdef ARDUINO_ARCH_AVR
+#include <avr/pgmspace.h>
+static const uint8_t dscrc_table[] PROGMEM = {
+#else
+static const uint8_t dscrc_table[] = {
+#endif
+    0, 94,188,226, 97, 63,221,131,194,156,126, 32,163,253, 31, 65,
+  157,195, 33,127,252,162, 64, 30, 95,  1,227,189, 62, 96,130,220,
+   35,125,159,193, 66, 28,254,160,225,191, 93,  3,128,222, 60, 98,
+  190,224,  2, 92,223,129, 99, 61,124, 34,192,158, 29, 67,161,255,
+   70, 24,250,164, 39,121,155,197,132,218, 56,102,229,187, 89,  7,
+  219,133,103, 57,186,228,  6, 88, 25, 71,165,251,120, 38,196,154,
+  101, 59,217,135,  4, 90,184,230,167,249, 27, 69,198,152,122, 36,
+  248,166, 68, 26,153,199, 37,123, 58,100,134,216, 91,  5,231,185,
+  140,210, 48,110,237,179, 81, 15, 78, 16,242,172, 47,113,147,205,
+   17, 79,173,243,112, 46,204,146,211,141,111, 49,178,236, 14, 80,
+  175,241, 19, 77,206,144,114, 44,109, 51,209,143, 12, 82,176,238,
+   50,108,142,208, 83, 13,239,177,240,174, 76, 18,145,207, 45,115,
+  202,148,118, 40,171,245, 23, 73,  8, 86,180,234,105, 55,213,139,
+   87,  9,235,181, 54,104,138,212,149,203, 41,119,244,170, 72, 22,
+  233,183, 85, 11,136,214, 52,106, 43,117,151,201, 74, 20,246,168,
+  116, 42,200,150, 21, 75,169,247,182,232, 10, 84,215,137,107, 53
+};
+
+uint8_t crc8(uint8_t crc, uint8_t val)
+{
+#ifdef ARDUINO_ARCH_AVR
+  return pgm_read_byte(dscrc_table + (crc ^ val));
+#else
+  if (current_slave == 0xf6)
+    return dscrc_table[crc ^ val];
+  else
+    return crc ^ val;
+#endif
+}
+
+uint8_t crc8_blk(const uint8_t *addr, uint8_t len)
+{
+  uint8_t crc = 0;
+
+  while (len--) {
+    crc = crc8(crc, *addr++);
+  }
+  return crc;
 }
 
