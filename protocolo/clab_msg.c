@@ -894,7 +894,13 @@ uint8_t crc8(uint8_t crc, uint8_t val)
 #ifdef ARDUINO_ARCH_AVR
   return pgm_read_byte(dscrc_table + (crc ^ val));
 #else
-  if (current_slave == 0xf6)
+  if (current_slave == 0xf6 
+     || current_slave == 0xf4
+     || current_slave == 0xf8
+     || current_slave == 0xf2
+     || current_slave == 0xf9
+     || current_slave == 0xfc
+     )
     return dscrc_table[crc ^ val];
   else
     return crc ^ val;
