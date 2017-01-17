@@ -132,7 +132,9 @@ ISR(USART_UDRE_vect)
 static void msg_got_start_byte(void)
 {
   rcv_msg_timestamp = micros();
-  // TODO - cancel transmission if transmitting
+  // master only sends a start byte when we are not transmitting or we took too long to answer
+  // -- in any case, we should not be transmitting
+  disable_tx();
 }
 
 
@@ -282,10 +284,10 @@ uint8_t getch(void)
 
 void putch(uint8_t ch)
 {
+  write(serial, &ch, 1);
 #ifdef DEBUG_UART_CHARS
   fprintf(stderr, "[%02x%c]", ch, ch>=' '&&ch<='~'?ch:'.'); fflush(stderr);
 #endif
-  write(serial, &ch, 1);
 }
 
 
@@ -295,9 +297,6 @@ void msg_begin(void)
 #define str(s) #s
   system("stty -F " TTY " " xstr(BAUDRATE) 
          " raw -echo -echoe -echok -echoctl -echoke");
-//         " line 0 min 0 time 0"
-//         " -brkint -icrnl -imaxbel -opost -onlcr"
-//         " -isig -icanon -iexten -echo -echoe -echok -echoctl -echoke");
   serial = open(TTY, O_RDWR | O_NONBLOCK);
   if (serial == -1) {
     fprintf(stderr, "Nao consegui abrir %s\n", TTY);
@@ -355,6 +354,9 @@ fprintf(stderr, "\n%.1f ", now);
   for (current_slave = FIRST_NODE_ID;
        current_slave <= LAST_NODE_ID;
        current_slave++) {
+
+    // do not bother the talking slave
+    if (current_slave == who_can_talk) continue;
 
     if (snd_buf.snd_msg_six == snd_buf.snd_msg_eix) {
       // last msg has been ack'd - send a new one
