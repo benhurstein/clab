@@ -90,6 +90,10 @@ bool msg_send_bbw(uint8_t b1, uint8_t b2, uint16_t w1);
 bool msg_send_w(uint16_t w1);
 bool msg_send_ww(uint16_t w1, uint16_t w2);
 
+// Dallas crc8
+uint8_t crc8(uint8_t crc, uint8_t val);
+uint8_t crc8_blk(const uint8_t *addr, uint8_t len);
+
 #ifdef __cplusplus
 }
 #endif
