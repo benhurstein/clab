@@ -424,6 +424,8 @@ static void msg_got_ack_msg(void)
 {
   // forget ack'd message
   snd_bufs[rcv_msg_sender - FIRST_NODE_ID].snd_msg_six = snd_bufs[rcv_msg_sender - FIRST_NODE_ID].snd_msg_eix;
+  // toggle DATA type for next message
+  //snd_bufs[rcv_msg_sender - FIRST_NODE_ID].snd_MSG_DATA ^= (MSG_DATA0 ^ MSG_DATA1);
 }
 
 static void msg_got_nack_msg(void)
