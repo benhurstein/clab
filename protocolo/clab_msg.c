@@ -134,21 +134,25 @@ static void msg_got_start_byte(void)
   rcv_msg_timestamp = micros();
   // master only sends a start byte when we are not transmitting or we took too long to answer
   // -- in any case, we should not be transmitting
+  snd_buf.snd_msg_oix = snd_buf.snd_msg_eix;
   disable_tx();
 }
 
 
 static void msg_got_talk_msg(void)
 {
+  static byte send_retries = 0;
   // master misses me -- let's say something
   enable_tx();
-  if (snd_buf.snd_msg_six == snd_buf.snd_msg_eix) {
+  if (snd_buf.snd_msg_six == snd_buf.snd_msg_eix || send_retries > 9) {
     // last msg has been ack'd - send a new one
-    snd_buf.snd_msg_eix = snd_buf.snd_msg_iix;        
+    snd_buf.snd_msg_eix = snd_buf.snd_msg_iix;
+    send_retries = 0;
   }
   // start at first byte of msg
   snd_buf.snd_msg_oix = snd_buf.snd_msg_six;
   putch(node_id);
+  send_retries++;
 }
 
 static void msg_got_sync_msg(void)
