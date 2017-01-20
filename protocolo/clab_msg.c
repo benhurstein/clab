@@ -244,7 +244,7 @@ receiving:
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#define DEBUG_UART_CHARS
+//#define DEBUG_UART_CHARS
 
 #define ACK_TIMEOUT 1
 
@@ -317,7 +317,7 @@ extern timestamp_t now;
 uint8_t who_can_talk = 0;
 uint8_t next_to_talk = FIRST_NODE_ID;
 timestamp_t last_talk_timestamp;
-#define TALK_TIMEOUT 0.02
+#define TALK_TIMEOUT 0.025
 
 void verify_uart(void)
 {
@@ -894,13 +894,7 @@ uint8_t crc8(uint8_t crc, uint8_t val)
 #ifdef ARDUINO_ARCH_AVR
   return pgm_read_byte(dscrc_table + (crc ^ val));
 #else
-  if (current_slave == 0xf6 
-     || current_slave == 0xf4
-     || current_slave == 0xf8
-     || current_slave == 0xf2
-     || current_slave == 0xf9
-     || current_slave == 0xfc
-     )
+  if (current_slave != 0xfe) // 0xfe is the bootloader, it uses the old CRC
     return dscrc_table[crc ^ val];
   else
     return crc ^ val;
