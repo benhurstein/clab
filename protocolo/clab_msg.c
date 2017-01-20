@@ -328,7 +328,7 @@ void verify_uart(void)
       break;
     }
     msg_got_byte(ch);
-  } while (false/*true*/);
+  } while (true/*false*//*true*/);
 
   if (who_can_talk != 0) {
     if ((now - last_talk_timestamp) > TALK_TIMEOUT) {
@@ -377,8 +377,14 @@ fprintf(stderr, "\n%.1f ", now);
       }
       int bytes_sent = 0;
       while (snd_buf.snd_msg_oix != snd_buf.snd_msg_eix) {
-        putch(snd_buf.snd_msg_buf[snd_buf.snd_msg_oix++]);
+        uint8_t ch;
+        ch = snd_buf.snd_msg_buf[snd_buf.snd_msg_oix++];
+        putch(ch);
         bytes_sent++;
+        if (ch == MSG_END) {
+          // we're at the end of the message
+          snd_buf.snd_msg_eix = snd_buf.snd_msg_oix;
+	}
       }
       if (bytes_sent == 0) {
         putch(MSG_END);
@@ -418,6 +424,8 @@ static void msg_got_ack_msg(void)
 {
   // forget ack'd message
   snd_bufs[rcv_msg_sender - FIRST_NODE_ID].snd_msg_six = snd_bufs[rcv_msg_sender - FIRST_NODE_ID].snd_msg_eix;
+  // toggle DATA type for next message
+  //snd_bufs[rcv_msg_sender - FIRST_NODE_ID].snd_MSG_DATA ^= (MSG_DATA0 ^ MSG_DATA1);
 }
 
 static void msg_got_nack_msg(void)
