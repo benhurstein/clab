@@ -1,0 +1,40 @@
+#!/bin/bash
+
+MQTT_HOST=localhost
+
+# liga o compressor quando a temperatura do alto do tanque chegar neste valor
+MAX_TEMP=13
+
+# mantem o sistema ligado por este tempo apos a temperatura baixar de MAX_TEMP
+TIME_ON=$[35*60]
+
+timeout=$(date +%s)
+proximo_envio=$timeout
+
+estado_atual=NAOSEI
+
+mosquitto_sub -h $MQTT_HOST -t /clab/sensor/tanque-temp-TG-alto|while read t
+do
+  ti=`echo 10*$t|bc|cut -d. -f1`
+  now=$(date +%s)
+
+  if [ $ti -ge 106 ]; then
+    estado_quero=1
+    timeout=$[$now+$TIME_ON]
+    h=$(date +%k)
+# de madrugada da mais tempo pra ele gelar
+    if [ $h -gt 22 -o $h -lt 8 ]; then
+      timeout=$[$timeout+3600]
+    fi
+  elif [ $now -ge $timeout ]; then
+    estado_quero=0
+  fi
+#estado_quero=1
+
+  if [ $estado_quero != $estado_atual -o $now -gt $proximo_envio ]; then
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/bomba-calor-estado -m $estado_quero
+    estado_atual=$estado_quero
+    proximo_envio=$[now+10]
+    echo $t $estado_atual $now >> /home/benhur/clab/log/controle-bomba-calor.log
+  fi
+done

@@ -1,0 +1,12 @@
+[Unit]
+Description=daemon CLAB para controlar o ventilador da adega
+Wants=clab.service
+Requires=mosquitto.service
+After=mosquitto.service
+
+[Service]
+ExecStart=/home/benhur/clab/bin/controle-vent
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

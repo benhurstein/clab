@@ -1,0 +1,111 @@
+#!/bin/bash
+
+MQTT_HOST=localhost
+
+Talvo1=15031
+Talvo=$[Talvo1+(`date +%s`-1482740000)/100]
+if [ $Talvo -gt 15969 ]; then 
+  Talvo=15969
+fi
+
+Tmed=$Talvo
+Tvmed=$Talvo
+Tinf=$[Talvo-10]
+Tsup=$[Talvo+10]
+Tmax=$Talvo
+Tmin=$Talvo
+estado_atual=NAOSEI
+estado_quero=0
+motor_atual=NAOSEI
+motor_quero=100
+teve_acima=0
+
+proximo_envio=$(date +%s)
+
+mosquitto_sub -h $MQTT_HOST -t /clab/sensor/adega-temp-garrafa-alto -t /clab/sensor/adega-temp-vent-saida|while read t
+do
+  read tv
+  now=$(date +%s)
+  Tmed=`echo "($t*1000+$Tmed*19)/20"|bc -l`
+  Tvmed=`echo "($tv*1000+$Tvmed*19)/20"|bc -l`
+  Ttes=`echo $Tmed|cut -d. -f1`
+
+  if [ $Ttes -gt $Talvo ]; then
+    motor_quero=`echo "($Tmed-$Talvo)*10"|bc -l|cut -d. -f1`
+    if [ $motor_quero -lt 20 ]; then
+      if [ $teve_acima = 1 ]; then
+        motor_quero=0
+      else
+        motor_quero=20
+      fi
+    else
+      teve_acima=1 
+      if [ $motor_quero -gt 100 ]; then
+        motor_quero=100
+      fi
+#if [ $motor_quero -gt 20 ]; then
+#  motor_quero=40
+#fi
+    fi
+  else
+    teve_acima=0
+    motor_quero=0
+  fi
+  #motor_quero=60
+#  if [ $Ttes -gt $Tsup ]; then
+#    estado_quero=1
+#  elif [ $Ttes -lt $Tinf ]; then
+#    estado_quero=0
+#  fi
+  if [ $estado_quero -eq 1 ]; then
+    if [ $Ttes -gt $Tmax ]; then
+      Tmax=$Ttes
+    elif [ $[Tmax-Ttes] -ge 10 -a $Ttes -lt $Talvo ]; then
+      estado_quero=0
+      Tmin=$Ttes
+    fi
+  else
+    if [ $Ttes -lt $Tmin ]; then
+      Tmin=$Ttes
+    elif [ $[Ttes-Tmin] -ge 10 -a $Ttes -gt $Talvo ]; then
+      estado_quero=1
+      Tmax=$Ttes
+    fi
+  fi
+  ## novo teste do motor, controlado pela temperatura de saida do ar
+  if [ $estado_quero -eq 1 ]; then
+    #Tar=`echo "$tv*1000"|bc -l`
+    Tar=`echo $Tvmed|cut -d. -f1`
+    delta=$[Talvo-Tar]
+    # se o ar tiver 3 graus ou mais abaixo do alvo, nao precisa agua
+    # se tiver 2 graus ou menos, 100% da agua
+    motor_quero=$[(3000-delta)/10]
+    if [ $motor_quero -lt 20 ]; then
+      motor_quero=20
+    fi
+    if [ $motor_quero -gt 100 ]; then
+      motor_quero=100
+    fi
+  else
+    motor_quero=0
+  fi
+  # ignora se temperatura estiver muito alta
+  if [ $[Ttes-Talvo] -gt 200 ]; then
+    motor_quero=100
+  fi
+  ##
+  if [ $estado_quero != $estado_atual -o $motor_quero != $motor_atual -o $now -ge $proximo_envio ]; then
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/adega-vent -m $estado_quero
+    estado_atual=$estado_quero
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/adega-bomba -m $motor_quero
+    motor_atual=$motor_quero
+    proximo_envio=$[now+10]
+  fi
+  Talvo=$[Talvo1+(`date +%s`-1482740000)/100]
+  if [ $Talvo -gt 15969 ]; then 
+    Talvo=15969
+  fi
+  Tinf=$[Talvo-10]
+  Tsup=$[Talvo+10]
+  echo $Ttes $t $estado_atual $motor_atual $Talvo $now >> /home/benhur/clab/log/controle-vent.log
+done

@@ -1,0 +1,12 @@
+[Unit]
+Description=daemon CLAB para controlar a bomba de calor
+Wants=clab.service
+Requires=mosquitto.service
+After=mosquitto.service
+
+[Service]
+ExecStart=/home/benhur/clab/bin/controle-bomba-calor
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

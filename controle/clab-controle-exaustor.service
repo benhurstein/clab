@@ -1,0 +1,12 @@
+[Unit]
+Description=daemon CLAB para controlar o exaustor dos banheiros
+Wants=clab.service
+Requires=mosquitto.service
+After=mosquitto.service
+
+[Service]
+ExecStart=/home/benhur/clab/bin/controle-exaustor
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

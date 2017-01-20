@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# liga a bomba de agua do condicionador e o ventilador para quando voltarmos das ferias
+
+MQTT_HOST=localhost
+
+
+while true; do
+# chegamos pela uma da madruga, liga as 8 da noite
+  if [ $(date +%s) -gt $(date +%s -d "Jan 30 20:00") ]; then
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/bomba-cond-frio -m 1
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-Q1-sul -m 255
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-Q1-norte -m 255
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-Q2 -m 255
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-Q3 -m 0
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-estar-sul -m 255
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-estar-norte -m 255
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-escritorio -m 0
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-jantar -m 0
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-B1 -m 255
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/borboleta-B2 -m 255
+    mosquitto_pub -h $MQTT_HOST -t /clab/actuator/ventilador-principal -m 1
+  fi
+  sleep 852
+done

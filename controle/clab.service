@@ -1,0 +1,11 @@
+[Unit]
+Description=CLAB daemon
+Requires=mosquitto.service
+After=mosquitto.service
+
+[Service]
+ExecStart=/home/benhur/clab/bin/clab
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
