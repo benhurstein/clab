@@ -13,14 +13,14 @@ timestamp_t now;
 Servo servo;
 
 #define NSERVOS 10
-// SS ES SN SJ Q1N Q1S Q2 Q3 B1 B2
-byte servo_pin[NSERVOS] = { 11, 12, A4, A5, 4, A1, 3, A2, 2, A3 };
-byte servo_closed_val[NSERVOS] = { 140, 150, 140, 140, 160, 155, 145, 150, 145, 135};
-byte servo_open_val[NSERVOS] = { 40, 55, 50, 50, 60, 55, 55, 45, 50, 45 };
+//                                  SS   ES   SN   SJ  Q1N  Q1S   Q2   Q3   B1   B2
+byte servo_pin[NSERVOS] =        {  11,  12,  A4,  A5,   4,  A1,   3,  A2,   2,  A3 };
+byte servo_closed_val[NSERVOS] = { 140, 143, 134, 140, 135, 145, 138, 140, 145, 135};
+byte servo_open_val[NSERVOS] =   {  40,  50,  50,  50,  50,  45,  55,  35,  50,  45 };
 byte servo_pos[NSERVOS];
 byte servo_want[NSERVOS];
 
-#define SERVO_ON_TIME 2000
+#define SERVO_ON_TIME 2500
 #define SERVO_OFF_TIME 500
 #define SERVO_TIME (SERVO_ON_TIME + SERVO_OFF_TIME)
 
