@@ -3,74 +3,89 @@ extern const uint8_t node_id = 0xf6;
 
 #include "clab_msg.h"
 
-  uint32_t now;
+uint32_t now;
 
-  byte ht1w_pin = 4;
-  byte ht1w_energy_pin = 5;
-  float ht1w_hum;
-  int16_t ht1w_hum_raw;
-  float ht1w_temp;
-  int16_t ht1w_temp_raw;
-  bool hasNewHT1w = false;
-
-void ht1w_begin(void)
+class HT1w      // AM2301 etc HT sensor 1-wire protocol
 {
-  pinMode(ht1w_energy_pin, OUTPUT);
-  digitalWrite(ht1w_energy_pin, LOW);
-  pinMode(6, OUTPUT);
-  digitalWrite(6, LOW);
+public:
+  HT1w();
+  ~HT1w();
+
+  void begin(uint8_t dataPin, uint32_t period, uint32_t delay = 0, uint8_t powerPin = -1);
+  void verify(void);
+  bool hasNewData(void);
+  void dataIsOld(void);
+  int16_t rawTemperature(void);
+  int16_t rawHumidity(void);
+
+private:
+  uint8_t _data_pin;
+  uint8_t _power_pin;
+  uint32_t _period;
+  int16_t _raw_humidity;
+  int16_t _raw_temperature;
+  bool _has_new_data;
+
+  enum { stopped, waiting, waking, reading } _status;
+  timestamp_t _timestamp;
+};
+
+HT1w::HT1w() {}
+HT1w::~HT1w() {}
+
+void HT1w::begin(uint8_t dataPin, uint32_t period, uint32_t delay = 0, uint8_t powerPin = -1)
+{
+  _data_pin = dataPin;
+  _power_pin = powerPin;
+  pinMode(_data_pin, INPUT_PULLUP);
+  if (_power_pin != -1) pinMode(_power_pin, OUTPUT);
+  _period = period;
+  _status = stopped;
+  _timestamp = delay;
 }
 
-void read_ht1w(void)
+void HT1w::verify(void)
 {
-  static enum { stopped, waiting, waking, reading } status = stopped;
-  static uint32_t timeStamp;
-  static bool first = true;
-
-  switch (status) {
+  switch (_status) {
     case stopped:
-      if (now - timeStamp >= 24000) {
-        // energize the sensor
-        digitalWrite(ht1w_energy_pin, HIGH);
-        digitalWrite(6, HIGH);
-        first = true;
-        status = waiting;
-        timeStamp = now;
+      if (now - _timestamp >= _period) {
+        // power the sensor up
+        if (_power_pin != -1) digitalWrite(_power_pin, HIGH);
+        _status = waiting;
+        _timestamp = now;
       }
       break;
     case waiting:
-      if (now - timeStamp >= 3000) {
-        // wake the sensor up
-        pinMode(ht1w_pin, OUTPUT);
-        digitalWrite(ht1w_pin, LOW);
-        timeStamp = now;
-        status = waking;
+      if (now - _timestamp > 2500) {
+        // it should be well, let's wake it and read the values
+        pinMode(_data_pin, OUTPUT);
+        digitalWrite(_data_pin, LOW);
+        _status = waking;
       }
-      break;
+      break;    
     case waking:
-      if (now - timeStamp > 2) {
+      if (now - _timestamp > 2502) {
         // it should be awaken, let's read
-        status = reading;
-        //timeStamp = now;
+        _status = reading;
       }
       break;
     case reading:
-      byte buf[5] = {1,2,3,4,5};
+      byte buf[5];
       // max number of times to read the pin value
       // so that in case of comm error we don't get stuck
       // value must be changed for faster processor
-      uint16_t timeout = 10000;
+      uint16_t timeout = 1000;
 
       // time critical -- cannot be interrupted
       noInterrupts();
       // let the sensor be in control
-      pinMode(ht1w_pin, INPUT_PULLUP);
-      while (timeout && digitalRead(ht1w_pin) == LOW) timeout--;
+      pinMode(_data_pin, INPUT_PULLUP);
+      while (timeout && digitalRead(_data_pin) == LOW) timeout--;
       // the sensor should put the pin on low and then on high, for ~80us each
-      while (timeout && digitalRead(ht1w_pin) == HIGH) timeout--;
-      while (timeout && digitalRead(ht1w_pin) == LOW) timeout--;
+      while (timeout && digitalRead(_data_pin) == HIGH) timeout--;
+      while (timeout && digitalRead(_data_pin) == LOW) timeout--;
       // now it should put it on low to start the first bit
-      while (timeout && digitalRead(ht1w_pin) == HIGH) timeout--;
+      while (timeout && digitalRead(_data_pin) == HIGH) timeout--;
 
       // read 5 bytes
       for (int i=0; timeout && i<5; i++) {
@@ -79,11 +94,11 @@ void read_ht1w(void)
         for (byte bit=0; bit<8; bit++) {
           byte count_low = 0, count_high = 0;
           b <<= 1;
-          while (timeout && digitalRead(ht1w_pin) == LOW) {
+          while (timeout && digitalRead(_data_pin) == LOW) {
             count_low += 3;
             timeout--;
           }
-          while (timeout && digitalRead(ht1w_pin) == HIGH) {
+          while (timeout && digitalRead(_data_pin) == HIGH) {
             count_high += 4;
             timeout--;
           }
@@ -95,26 +110,39 @@ void read_ht1w(void)
       }
       interrupts();
       // end of time-critical section
-      if (first) {
-        first = false;
-        status = waiting;
-      } else {
-        if (timeout && buf[4] == ((buf[0] + buf[1] + buf[2] + buf[3]) & 0xFF)) {
-          ht1w_hum_raw = ((buf[0] << 8) | buf[1]);
-          ht1w_hum = ht1w_hum_raw / 10.0;
-          ht1w_temp_raw = (((buf[2] & 0x7f) << 8) | buf[3]);
-          if (buf[2] & 0x80) ht1w_temp_raw = -ht1w_temp_raw;
-          ht1w_temp = ht1w_temp_raw / 10.0;
-          hasNewHT1w = true;
-          //Serial.print(timeout);
-        }
-        status = stopped;
-        //timeStamp = now;
-        digitalWrite(ht1w_energy_pin, LOW);
-        digitalWrite(6, LOW);
+
+      if (buf[4] == ((buf[0] + buf[1] + buf[2] + buf[3]) & 0xFF)) {
+        _raw_humidity = ((buf[0] << 8) | buf[1]);
+        //_humidity = _raw_humidity / 10.0;
+        _raw_temperature = (((buf[2] & 0x7f) << 8) | buf[3]);
+        if (buf[2] & 0x80) _raw_temperature = -_raw_temperature;
+        //_temperature = _raw_temperature / 10.0;
+        _has_new_data = true;
       }
+      _status = stopped;
+      if (_power_pin != -1) digitalWrite(_power_pin, LOW);
       break;
   }
+}
+
+bool HT1w::hasNewData(void)
+{
+  return _has_new_data;
+}
+
+void HT1w::dataIsOld(void)
+{
+  _has_new_data = false;
+}
+
+int16_t HT1w::rawTemperature(void)
+{
+  return _raw_temperature;
+}
+
+int16_t HT1w::rawHumidity(void)
+{
+  return _raw_humidity;
 }
 
 bool hasNewHeartbeat = false;
@@ -162,40 +190,52 @@ void verify_comm(void)
   }
 }
 
+HT1w q2_ambient_sensor;
+HT1w q2_vent_sensor;
 
 void setup() {
-  ht1w_begin();
+  q2_ambient_sensor.begin(4, 20000, 0, 5);
+  q2_vent_sensor.begin(7, 20000, 3000);
   msg_begin();
 }
 
 void loop() {
   now = millis();
 
-  read_ht1w();
+  q2_ambient_sensor.verify();
+  q2_vent_sensor.verify();
   heartbeat_verify();
 
   verify_comm();
 
   uint8_t nsensors = 0;
-  if (hasNewHT1w) nsensors += 2;
+  if (q2_ambient_sensor.hasNewData()) nsensors += 2;
+  if (q2_vent_sensor.hasNewData()) nsensors += 2;
   if (hasNewHeartbeat) nsensors += 1;
   if (nsensors == 0) return;
 
   if (msg_start()) {
     msg_putbyte('2');
     msg_putbyte(nsensors);
-    if (hasNewHT1w) {
+    if (q2_ambient_sensor.hasNewData()) {
       msg_putbyte(0);
-      msg_putword(ht1w_hum_raw);
+      msg_putword(q2_ambient_sensor.rawHumidity());
       msg_putbyte(1);
-      msg_putword(ht1w_temp_raw);
+      msg_putword(q2_ambient_sensor.rawTemperature());
+    }
+    if (q2_vent_sensor.hasNewData()) {
+      msg_putbyte(2);
+      msg_putword(q2_vent_sensor.rawHumidity());
+      msg_putbyte(3);
+      msg_putword(q2_vent_sensor.rawTemperature());
     }
     if (hasNewHeartbeat) {
       msg_putbyte(255);
       msg_putword(heartbeat_value);
     }
     if (msg_end()) {
-      hasNewHT1w = false;
+      if (q2_ambient_sensor.hasNewData()) q2_ambient_sensor.dataIsOld();
+      if (q2_vent_sensor.hasNewData()) q2_vent_sensor.dataIsOld();
       hasNewHeartbeat = false;
     }
   }
