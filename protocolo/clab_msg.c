@@ -246,6 +246,7 @@ receiving:
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <fcntl.h>
 
 //#define DEBUG_UART_CHARS
@@ -304,6 +305,10 @@ void msg_begin(void)
   serial = open(TTY, O_RDWR | O_NONBLOCK);
   if (serial == -1) {
     fprintf(stderr, "Nao consegui abrir %s\n", TTY);
+    exit(1);
+  }
+  if (flock(serial, LOCK_EX|LOCK_NB) != 0) {
+    fprintf(stderr, "Nao consegui acesso exclusivo a %s\n", TTY);
     exit(1);
   }
 
